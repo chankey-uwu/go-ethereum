@@ -9,6 +9,8 @@ network_params:
 
 additional_services:
   - dora
+  - prometheus
+  - grafana
 
 persistent: true
 
