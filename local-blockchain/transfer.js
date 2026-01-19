@@ -22,6 +22,8 @@ async function main() {
 
     const whaleWallet = new ethers.Wallet(genesisAccounts[0].pkey, provider);
 
+    console.log(`\nCuenta Ballena usada para el envío: ${whaleWallet.address}`);
+
     const balanceBefore = await provider.getBalance(whaleWallet.address);
     console.log(`\nBalance de ${whaleWallet.address}:`);
     console.log(`${ethers.formatEther(balanceBefore)} ETH`);
