@@ -11,6 +11,7 @@ additional_services:
   - dora
   - prometheus
   - grafana
+  - otterscan
 
 persistent: true
 
