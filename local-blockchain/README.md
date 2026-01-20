@@ -31,3 +31,27 @@
 ## Dora
 
 Abriendo `http://127.0.0.1:35000` en el navegador se puede ver un Dashboard de la Blockchain, como las épocas, bloques
+
+## Nodo local
+
+1. En `go-ethereum` correr el siguiente comando para inicializar **geth** localmente:
+   ```console
+   ../go-ethereum$ ./build/bin/geth init --datadir ./local-blockchain/local-node ./local-blockchain/genesis-data/geth-genesis.json
+   ```
+
+2. Luego, para inicializar el nodo y que se conecte a la red corremos en `go-ethereum`:
+    ```console
+    ../go-ethereum$ ./build/bin/geth --datadir .\local-blockchain\local-node --networkid 585858 --http --http.port 8547 --http.api "eth,net,web3,admin" --port 30304 --bootnodes "enode://16a02395758b437b65205c8f79ba35b7763a26c2d6091ba9140b8bcc5b5225a00cace4a818df1678f302c9d8cb568998567eee01bf20ffcdb792d9a91ff96c58@127.0.0.1:32000" --authrpc.port 8553
+    ```
+
+3. Para abrir una terminal en **geth**:
+   ```console
+   ../go-ethereum$ ./build/bin/geth attach http://127.0.0.1:8547
+   ```
+
+   y luego correr:
+
+   ```console
+   > admin.addPeer("enode://16a02395758b437b65205c8f79ba35b7763a26c2d6091ba9140b8bcc5b5225a00cace4a818df1678f302c9d8cb568998567eee01bf20ffcdb792d9a91ff96c58@127.0.0.1:32000")
+   ```
+

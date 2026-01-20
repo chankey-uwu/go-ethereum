@@ -1,6 +1,6 @@
 const { ethers } = require("ethers");
 
-const RPC_URL = "http://127.0.0.1:32003";
+const RPC_URL = "http://127.0.0.1:8547";
 
 async function main() {
     const provider = new ethers.JsonRpcProvider(RPC_URL);

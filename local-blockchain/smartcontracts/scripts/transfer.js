@@ -1,13 +1,13 @@
 const { ethers } = require("ethers");
 
-const RPC_URL = "http://127.0.0.1:32003"; 
+const RPC_URL = "http://127.0.0.1:8547"; 
 
 const genesisAccounts = [
     { address: "0x8943545177806ED17B9F23F0a21ee5948eCaa776", pkey: "bcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31" },
     { address: "0xE25583099BA105D9ec0A67f5Ae86D90e50036425", pkey: "39725efee3fb28614de3bacaffe4cc4bd8c436257e2c8bb887c4b5c4be45e76d" },
 ];
 
-const accountAddress = "0x23148FE43b3aEA23bb4fCb1b92A38d60451A3B23";
+const accountAddress = "0xc37e389bF47aB35E7fE2bf6F2489eB47fC6db430";
 
 async function main() {
     const provider = new ethers.JsonRpcProvider(RPC_URL);
