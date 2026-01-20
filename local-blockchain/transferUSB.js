@@ -14,7 +14,7 @@ async function main() {
         return;
     }
 
-    const whaleWallet = new ethers.Wallet(genesisAccounts[0].pkey, provider);
+    const whaleWallet = new ethers.Wallet(require(usbLocation + "0x8943545177806ED17B9F23F0a21ee5948eCaa776.json").privateKey, provider);
 
     console.log(`\nCuenta Ballena usada para el envío: ${whaleWallet.address}`);
 
@@ -22,9 +22,11 @@ async function main() {
     console.log(`\nBalance de ${whaleWallet.address}:`);
     console.log(`${ethers.formatEther(balanceBefore)} ETH`);
 
-    const amountToSend = ethers.parseEther("10000.0"); 
+    const amountToSend = ethers.parseEther("1000.0"); 
 
-    console.log(`\nEnviando 10000.0 ETH a ${accountAddress}...`);
+    const accountAddress = "0x7937b877102BAF25b735aB0D5f1addeC2893aaaD";
+
+    console.log(`\nEnviando 1000.0 ETH a ${accountAddress}...`);
     
     const tx = await whaleWallet.sendTransaction({
         to: accountAddress,
