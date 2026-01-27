@@ -292,13 +292,15 @@ func accountCreate(ctx *cli.Context) error {
 			utils.Fatalf("Error generating key on YubiKey: %v", err)
 		}
 
-		pubBytes := crypto.FromECDSAPub(publicYubikey.(*ecdsa.PublicKey))
+		publicYubikeyECDSA := publicYubikey.(*ecdsa.PublicKey)
+		pubBytes := crypto.FromECDSAPub(publicYubikeyECDSA)
+		yubikeyAddr := crypto.PubkeyToAddress(*publicYubikeyECDSA)
 
-		fmt.Println("-------------------------------------------")
+		fmt.Println("-----------------------------------------------------------")
 		fmt.Println("Key successfully generated on YubiKey.")
 		fmt.Println("Public Yubikey key: ", hexutil.Encode(pubBytes))
-		fmt.Println("-------------------------------------------")
-
+		fmt.Println("Yubikey Ethereum address: ", yubikeyAddr.Hex())
+		fmt.Println("-----------------------------------------------------------")
 	}
 
 	if err != nil {
