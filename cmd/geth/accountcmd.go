@@ -302,7 +302,6 @@ func accountCreate(ctx *cli.Context) error {
 	fmt.Printf("- You must NEVER share the secret key with anyone! The key controls access to your funds!\n")
 	fmt.Printf("- You must BACKUP your key file! Without the key, it's impossible to access account funds!\n")
 	fmt.Printf("- You must REMEMBER your password! Without the password, it's impossible to decrypt the key!\n\n")
-	fmt.Printf("- LOS CAMBIOS SI SE VEN REFLEJADOS AQUI WUJUUUUUU")
 	return nil
 }
 
