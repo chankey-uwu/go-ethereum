@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/go-piv/piv-go/piv"
 	"github.com/urfave/cli/v2"
 )
 
@@ -108,6 +109,7 @@ Print a short summary of all accounts`,
 					utils.KeyStoreDirFlag,
 					utils.PasswordFileFlag,
 					utils.LightKDFFlag,
+					utils.YubikeyFlag,
 				},
 				Description: `
     geth account new
@@ -261,6 +263,34 @@ func accountCreate(ctx *cli.Context) error {
 		password = utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
 	}
 	account, err := keystore.StoreKey(keydir, password, scryptN, scryptP)
+
+	if ctx.Bool(utils.YubikeyFlag.Name) {
+		cards, err := piv.Cards()
+		if err != nil {
+			utils.Fatalf("Error listing cards: %v", err)
+		}
+		if len(cards) == 0 {
+			utils.Fatalf("No YubiKeys found.")
+		}
+
+		yk, err := piv.Open(cards[0])
+		if err != nil {
+			utils.Fatalf("Error connecting card: %v", err)
+		}
+		defer yk.Close()
+
+		key := piv.Key{
+			Algorithm:   piv.AlgorithmEC256,
+			PINPolicy:   piv.PINPolicyNever,
+			TouchPolicy: piv.TouchPolicyNever,
+		}
+
+		_, err = yk.GenerateKey(piv.DefaultManagementKey, piv.SlotAuthentication, key)
+		if err != nil {
+			utils.Fatalf("Error generating key on YubiKey: %v", err)
+		}
+		fmt.Println("Key successfully generated on YubiKey.")
+	}
 
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)

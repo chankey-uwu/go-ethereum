@@ -572,6 +572,11 @@ var (
 		Value:    "",
 		Category: flags.AccountCategory,
 	}
+	YubikeyFlag = &cli.BoolFlag{
+		Name:     "yubikey",
+		Usage:    "Enable the creation of accounts on a Yubikey hardware wallet",
+		Category: flags.AccountCategory,
+	}
 	// EVM settings
 	VMEnableDebugFlag = &cli.BoolFlag{
 		Name:     "vmdebug",

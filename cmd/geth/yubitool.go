@@ -9,27 +9,25 @@ import (
 
 var yubiToolCommand = &cli.Command{
 	Name:  "yubitool",
-	Usage: "Gestionar YubiKey: Listar y Generar Keys",
+	Usage: "Manage YubiKey: List and Generate Keys",
 	Action: func(c *cli.Context) error {
 
 		cards, err := piv.Cards()
 		if err != nil {
-			return fmt.Errorf("error listando tarjetas: %w", err)
+			return fmt.Errorf("Error listing cards: %w", err)
 		}
 		if len(cards) == 0 {
-			fmt.Println("No se encontraron YubiKeys conectadas.")
+			fmt.Println("No YubiKeys found.")
 			return nil
 		}
 
-		fmt.Printf("Encontrada YubiKey en lector: %s\n", cards[0])
+		fmt.Printf("Found YubiKey in reader: %s\n", cards[0])
 
 		yk, err := piv.Open(cards[0])
 		if err != nil {
-			return fmt.Errorf("error conectando a la tarjeta: %w", err)
+			return fmt.Errorf("error connecting card: %w", err)
 		}
 		defer yk.Close()
-
-		fmt.Println("Intentando generar llave ECC P256 en Slot 9A (Authentication)...")
 
 		key := piv.Key{
 			Algorithm:   piv.AlgorithmEC256,
@@ -39,10 +37,10 @@ var yubiToolCommand = &cli.Command{
 
 		pubKey, err := yk.GenerateKey(piv.DefaultManagementKey, piv.SlotAuthentication, key)
 		if err != nil {
-			return fmt.Errorf("fallo al generar la key: %w", err)
+			return fmt.Errorf("error generating key: %w", err)
 		}
 
-		fmt.Printf("¡Éxito! Llave generada.\nPublic Key: %+v\n", pubKey)
+		fmt.Printf("Public Key: %+v\n", pubKey)
 
 		return nil
 	},
