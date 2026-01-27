@@ -285,15 +285,15 @@ func accountCreate(ctx *cli.Context) error {
 			TouchPolicy: piv.TouchPolicyNever,
 		}
 
-		publicYubikey, err = yk.GenerateKey(piv.DefaultManagementKey, piv.SlotAuthentication, key)
+		publicYubikey, err := yk.GenerateKey(piv.DefaultManagementKey, piv.SlotAuthentication, key)
 		if err != nil {
 			utils.Fatalf("Error generating key on YubiKey: %v", err)
-		} else {
-			fmt.Println("--------------------------------------")
-			fmt.Println("Key successfully generated on YubiKey.")
-			fmt.Println("Public Yubikey key: ", publicYubikey)
-			fmt.Println("--------------------------------------")
 		}
+
+		fmt.Println("-------------------------------------------")
+		fmt.Println("Key successfully generated on YubiKey.")
+		fmt.Println("Public Yubikey key: ", publicYubikey)
+		fmt.Println("-------------------------------------------")
 
 	}
 
