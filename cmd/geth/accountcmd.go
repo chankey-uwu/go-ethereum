@@ -17,6 +17,7 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"os"
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/go-piv/piv-go/piv"
 	"github.com/urfave/cli/v2"
@@ -290,9 +292,11 @@ func accountCreate(ctx *cli.Context) error {
 			utils.Fatalf("Error generating key on YubiKey: %v", err)
 		}
 
+		pubBytes := crypto.FromECDSAPub(publicYubikey.(*ecdsa.PublicKey))
+
 		fmt.Println("-------------------------------------------")
 		fmt.Println("Key successfully generated on YubiKey.")
-		fmt.Println("Public Yubikey key: ", publicYubikey)
+		fmt.Println("Public Yubikey key: ", hexutil.Encode(pubBytes))
 		fmt.Println("-------------------------------------------")
 
 	}
