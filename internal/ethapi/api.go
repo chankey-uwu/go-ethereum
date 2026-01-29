@@ -176,6 +176,10 @@ func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 	}, nil
 }
 
+func (api *EthereumAPI) SmartCardsInfo() ([]string, error) {
+	return nil, nil
+}
+
 // TxPoolAPI offers and API for the transaction pool. It only operates on data that is non-confidential.
 type TxPoolAPI struct {
 	b Backend
