@@ -20,6 +20,7 @@ import (
 	"context"
 	gocrypto "crypto"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
@@ -181,14 +182,14 @@ func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 	}, nil
 }
 
-type yubikeyArgs struct {
+type yubiKeyCreationArgs struct {
 	PIN           string
 	ManagementKey [24]byte
 	AlwaysReplace bool
 }
 
 // CreateYubiKeyAccount creates a new account on a connected Yubikey hardware wallet.
-func (api *EthereumAPI) CreateYubiKeyAccount(ctx context.Context, args yubikeyArgs) (common.Address, error) {
+func (api *EthereumAPI) CreateYubiKeyAccount(ctx context.Context, args yubiKeyCreationArgs) (common.Address, error) {
 	pin := args.PIN
 	if pin == "" {
 		pin = piv.DefaultPIN
@@ -2060,16 +2061,81 @@ func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs,
 	return common.Hash{}, fmt.Errorf("transaction %#x not found", matchTx.Hash())
 }
 
-func (api *TransactionAPI) SendYubikeyTransaction(ctx context.Context, args TransactionArgs) (common.Hash, error) {
+type yubiKeyTransactionArgs struct {
+	PIN *string
+}
+
+// SendYubiKeyTransaction realiza una transferencia firmada por una YubiKey.
+func (s *TransactionAPI) SendYubiKeyTransaction(ctx context.Context, args TransactionArgs, yubiArgs yubiKeyTransactionArgs) (common.Hash, error) {
 	cards, err := piv.Cards()
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("error listing YubiKeys: %v", err)
+	}
+
+	var targetYk *piv.YubiKey
+	var targetCert *x509.Certificate
+
+	for _, cardName := range cards {
+		yk, err := piv.Open(cardName)
+		if err != nil {
+			continue
+		}
+
+		cert, err := yk.Certificate(piv.SlotAuthentication)
+		if err != nil {
+			yk.Close()
+			continue
+		}
+
+		if strings.EqualFold(cert.Subject.CommonName, args.From.Hex()) {
+			targetYk = yk
+			targetCert = cert
+			break
+		}
+		yk.Close()
+	}
+
+	if targetYk == nil {
+		return common.Hash{}, fmt.Errorf("no YubiKey found for address %s", args.From.Hex())
+	}
+	defer targetYk.Close()
+
+	tx := args.ToTransaction(types.DynamicFeeTxType)
+
+	pin := piv.DefaultPIN
+	if yubiArgs.PIN != nil {
+		pin = *yubiArgs.PIN
+	}
+
+	auth := piv.KeyAuth{PIN: pin}
+	priv, err := targetYk.PrivateKey(piv.SlotAuthentication, targetCert.PublicKey, auth)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("error obtaining private key: %v", err)
+	}
+
+	signerHardware, ok := priv.(gocrypto.Signer)
+	if !ok {
+		return common.Hash{}, fmt.Errorf("private key is not a valid crypto.Signer")
+	}
+
+	signer := types.LatestSigner(s.b.ChainConfig())
+	h := signer.Hash(tx)
+
+	signature, err := signerHardware.Sign(rand.Reader, h[:], gocrypto.SHA256)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("error signing: %v", err)
+	}
+
+	signedTx, err := tx.WithSignature(signer, signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	if len(cards) == 0 {
-		return common.Hash{}, errors.New("no YubiKey detected")
+
+	if err := s.b.SendTx(ctx, signedTx); err != nil {
+		return common.Hash{}, err
 	}
 
-	return common.Hash{}, errors.New("YubiKey transaction signing not yet implemented")
+	return signedTx.Hash(), nil
 }
 
 // DebugAPI is the collection of Ethereum APIs exposed over the debugging
