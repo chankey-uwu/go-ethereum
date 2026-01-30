@@ -18,6 +18,10 @@ package ethapi
 
 import (
 	"context"
+	gocrypto "crypto"
+	"crypto/ecdsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -48,6 +52,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/go-piv/piv-go/piv"
 )
 
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas is
@@ -176,8 +181,142 @@ func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 	}, nil
 }
 
-func (api *EthereumAPI) SmartCardsInfo() ([]string, error) {
-	return nil, nil
+type yubikeyArgs struct {
+	PIN           string
+	ManagementKey [24]byte
+	AlwaysReplace bool
+}
+
+// CreateYubiKeyAccount creates a new account on a connected Yubikey hardware wallet.
+func (api *EthereumAPI) CreateYubiKeyAccount(ctx context.Context, args yubikeyArgs) (common.Address, error) {
+	pin := args.PIN
+	if pin == "" {
+		pin = piv.DefaultPIN
+	}
+
+	mgmtKey := args.ManagementKey
+	if mgmtKey == [24]byte{} {
+		mgmtKey = piv.DefaultManagementKey
+	}
+
+	cards, err := piv.Cards()
+	if err != nil {
+		return common.Address{}, fmt.Errorf("error listing cards: %v", err)
+	}
+
+	var yk *piv.YubiKey
+	for _, card := range cards {
+		if strings.Contains(strings.ToLower(card), "yubikey") {
+			yk, err = piv.Open(card)
+			if err != nil {
+				return common.Address{}, err
+			}
+			break
+		}
+	}
+
+	if yk == nil {
+		return common.Address{}, errors.New("no YubiKey detected")
+	}
+	defer yk.Close()
+
+	existingCert, err := yk.Certificate(piv.SlotAuthentication)
+	if err == nil && existingCert != nil && !args.AlwaysReplace {
+		addr := crypto.PubkeyToAddress(*(existingCert.PublicKey.(*ecdsa.PublicKey)))
+		return addr, fmt.Errorf("slot occupied by address %s. Use AlwaysReplace=true", addr.Hex())
+	}
+
+	keyOpts := piv.Key{
+		Algorithm:   piv.AlgorithmEC256,
+		PINPolicy:   piv.PINPolicyAlways,
+		TouchPolicy: piv.TouchPolicyNever,
+	}
+
+	pubKey, err := yk.GenerateKey(mgmtKey, piv.SlotAuthentication, keyOpts)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("error generating key: %v", err)
+	}
+
+	ecdsaPubKey, ok := pubKey.(*ecdsa.PublicKey)
+	if !ok {
+		return common.Address{}, errors.New("generated key is not an ECDSA public key")
+	}
+
+	address := crypto.PubkeyToAddress(*ecdsaPubKey)
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(time.Now().Unix()),
+		Subject: pkix.Name{
+			Organization: []string{"Geth Managed YubiKey"},
+			CommonName:   address.Hex(),
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().AddDate(100, 0, 0),
+		KeyUsage:  x509.KeyUsageDigitalSignature,
+	}
+
+	auth := piv.KeyAuth{PIN: pin}
+	priv, err := yk.PrivateKey(piv.SlotAuthentication, pubKey, auth)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("error obtaining signer interface: %v", err)
+	}
+
+	signer, ok := priv.(gocrypto.Signer)
+	if !ok {
+		return common.Address{}, errors.New("private key object does not implement crypto.Signer")
+	}
+
+	certBytes, err := x509.CreateCertificate(nil, &template, &template, ecdsaPubKey, signer)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("error signing certificate: %v", err)
+	}
+
+	newCert, err := x509.ParseCertificate(certBytes)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("error parsing generated certificate: %v", err)
+	}
+
+	if err := yk.SetCertificate(mgmtKey, piv.SlotAuthentication, newCert); err != nil {
+		return common.Address{}, fmt.Errorf("error storing certificate in slot: %v", err)
+	}
+
+	return address, nil
+}
+
+// YubiKeyInfo retrieves information about the connected Yubikey hardware wallet.
+func (api *EthereumAPI) YubiKeyInfo(ctx context.Context) ([]string, error) {
+	cards, err := piv.Cards()
+	if err != nil {
+		return nil, err
+	}
+	if len(cards) == 0 {
+		return nil, errors.New("no YubiKey detected")
+	}
+
+	var certList []string
+
+	for _, card := range cards {
+		if strings.Contains(strings.ToLower(card), "yubikey") {
+			yk, err := piv.Open(card)
+			if err != nil {
+				continue
+			}
+			defer yk.Close()
+
+			cert, err := yk.Certificate(piv.SlotAuthentication)
+			if err != nil {
+				continue
+			}
+
+			certList = append(certList, cert.Subject.CommonName)
+		}
+	}
+
+	if len(certList) == 0 {
+		return nil, errors.New("yubikey found but no authentication certificates detected")
+	}
+
+	return certList, nil
 }
 
 // TxPoolAPI offers and API for the transaction pool. It only operates on data that is non-confidential.
@@ -1919,6 +2058,18 @@ func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs,
 		}
 	}
 	return common.Hash{}, fmt.Errorf("transaction %#x not found", matchTx.Hash())
+}
+
+func (api *TransactionAPI) SendYubikeyTransaction(ctx context.Context, args TransactionArgs) (common.Hash, error) {
+	cards, err := piv.Cards()
+	if err != nil {
+		return common.Hash{}, err
+	}
+	if len(cards) == 0 {
+		return common.Hash{}, errors.New("no YubiKey detected")
+	}
+
+	return common.Hash{}, errors.New("YubiKey transaction signing not yet implemented")
 }
 
 // DebugAPI is the collection of Ethereum APIs exposed over the debugging
