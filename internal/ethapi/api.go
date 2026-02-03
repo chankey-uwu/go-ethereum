@@ -185,11 +185,11 @@ func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 type yubiKeyCreationArgs struct {
 	PIN           string
 	ManagementKey [24]byte
-	AlwaysReplace bool
+	Slot          string
 }
 
-// CreateYubiKeyAccount creates a new account on a connected Yubikey hardware wallet.
-func (api *EthereumAPI) CreateYubiKeyAccount(ctx context.Context, args yubiKeyCreationArgs) (common.Address, error) {
+// CreateYubiKeyAccount searches for a connected YubiKey hardware wallet and creates a new
+func (api *EthereumAPI) CreateYubiKeyAccount(ctx context.Context, args yubiKeyCreationArgs) (common.Address, string, error) {
 	pin := args.PIN
 	if pin == "" {
 		pin = piv.DefaultPIN
@@ -202,7 +202,7 @@ func (api *EthereumAPI) CreateYubiKeyAccount(ctx context.Context, args yubiKeyCr
 
 	cards, err := piv.Cards()
 	if err != nil {
-		return common.Address{}, fmt.Errorf("error listing cards: %v", err)
+		return common.Address{}, "", fmt.Errorf("error listing cards: %v", err)
 	}
 
 	var yk *piv.YubiKey
@@ -210,22 +210,54 @@ func (api *EthereumAPI) CreateYubiKeyAccount(ctx context.Context, args yubiKeyCr
 		if strings.Contains(strings.ToLower(card), "yubikey") {
 			yk, err = piv.Open(card)
 			if err != nil {
-				return common.Address{}, err
+				return common.Address{}, "", err
 			}
 			break
 		}
 	}
 
 	if yk == nil {
-		return common.Address{}, errors.New("no YubiKey detected")
+		return common.Address{}, "", errors.New("no YubiKey detected")
 	}
 	defer yk.Close()
 
-	existingCert, err := yk.Certificate(piv.SlotAuthentication)
-	if err == nil && existingCert != nil && !args.AlwaysReplace {
-		addr := crypto.PubkeyToAddress(*(existingCert.PublicKey.(*ecdsa.PublicKey)))
-		return addr, fmt.Errorf("slot occupied by address %s. Use AlwaysReplace=true", addr.Hex())
+	allSlots := []piv.Slot{piv.SlotAuthentication}
+	for i := uint32(0x82); i <= 0x95; i++ {
+		allSlots = append(allSlots, piv.Slot{Key: i})
 	}
+
+	var targetSlot *piv.Slot
+
+	if args.Slot != "" {
+		for _, s := range allSlots {
+			if fmt.Sprintf("%x", s.Key) == strings.ToLower(args.Slot) {
+				_, err := yk.Certificate(s)
+				if err != nil {
+					targetSlot = &s
+					break
+				} else {
+					return common.Address{}, "", fmt.Errorf("the requested slot %s is already occupied", args.Slot)
+				}
+			}
+		}
+		if targetSlot == nil {
+			return common.Address{}, "", fmt.Errorf("invalid or unavailable slot: %s", args.Slot)
+		}
+	} else {
+		for _, s := range allSlots {
+			_, err := yk.Certificate(s)
+			if err != nil {
+				targetSlot = &s
+				break
+			}
+		}
+	}
+
+	if targetSlot == nil {
+		return common.Address{}, "", errors.New("all slots are being used, you have to manually clean them up")
+	}
+
+	finalSlotHex := fmt.Sprintf("%x", targetSlot.Key)
 
 	keyOpts := piv.Key{
 		Algorithm:   piv.AlgorithmEC256,
@@ -233,14 +265,14 @@ func (api *EthereumAPI) CreateYubiKeyAccount(ctx context.Context, args yubiKeyCr
 		TouchPolicy: piv.TouchPolicyNever,
 	}
 
-	pubKey, err := yk.GenerateKey(mgmtKey, piv.SlotAuthentication, keyOpts)
+	pubKey, err := yk.GenerateKey(mgmtKey, *targetSlot, keyOpts)
 	if err != nil {
-		return common.Address{}, fmt.Errorf("error generating key: %v", err)
+		return common.Address{}, "", fmt.Errorf("error generating key in slot %s: %v", finalSlotHex, err)
 	}
 
 	ecdsaPubKey, ok := pubKey.(*ecdsa.PublicKey)
 	if !ok {
-		return common.Address{}, errors.New("generated key is not an ECDSA public key")
+		return common.Address{}, "", errors.New("generated key is not an ECDSA public key")
 	}
 
 	address := crypto.PubkeyToAddress(*ecdsaPubKey)
@@ -257,31 +289,31 @@ func (api *EthereumAPI) CreateYubiKeyAccount(ctx context.Context, args yubiKeyCr
 	}
 
 	auth := piv.KeyAuth{PIN: pin}
-	priv, err := yk.PrivateKey(piv.SlotAuthentication, pubKey, auth)
+	priv, err := yk.PrivateKey(*targetSlot, pubKey, auth)
 	if err != nil {
-		return common.Address{}, fmt.Errorf("error obtaining signer interface: %v", err)
+		return common.Address{}, "", fmt.Errorf("error obtaining signer: %v", err)
 	}
 
 	signer, ok := priv.(gocrypto.Signer)
 	if !ok {
-		return common.Address{}, errors.New("private key object does not implement crypto.Signer")
+		return common.Address{}, "", errors.New("private key does not implement crypto.Signer")
 	}
 
 	certBytes, err := x509.CreateCertificate(nil, &template, &template, ecdsaPubKey, signer)
 	if err != nil {
-		return common.Address{}, fmt.Errorf("error signing certificate: %v", err)
+		return common.Address{}, "", fmt.Errorf("error signing certificate: %v", err)
 	}
 
 	newCert, err := x509.ParseCertificate(certBytes)
 	if err != nil {
-		return common.Address{}, fmt.Errorf("error parsing generated certificate: %v", err)
+		return common.Address{}, "", fmt.Errorf("error parsing certificate: %v", err)
 	}
 
-	if err := yk.SetCertificate(mgmtKey, piv.SlotAuthentication, newCert); err != nil {
-		return common.Address{}, fmt.Errorf("error storing certificate in slot: %v", err)
+	if err := yk.SetCertificate(mgmtKey, *targetSlot, newCert); err != nil {
+		return common.Address{}, "", fmt.Errorf("error storing certificate in slot %s: %v", finalSlotHex, err)
 	}
 
-	return address, nil
+	return address, finalSlotHex, nil
 }
 
 // YubiKeyInfo retrieves information about the connected Yubikey hardware wallet.
