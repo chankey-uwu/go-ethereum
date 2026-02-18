@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -54,6 +55,7 @@ import (
 	"github.com/ethereum/go-ethereum/signer/fourbyte"
 	"github.com/ethereum/go-ethereum/signer/rules"
 	"github.com/ethereum/go-ethereum/signer/storage"
+	"github.com/go-piv/piv-go/piv"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
@@ -135,6 +137,24 @@ var (
 	testFlag = &cli.BoolFlag{
 		Name:  "stdio-ui-test",
 		Usage: "Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.",
+	}
+	YubikeyPIVSlotCreationFlag = &cli.StringFlag{
+		Name:     "yubikey.pivslot",
+		Usage:    "Slot to create the PIV key on the YubiKey (e.g. 9a, 9c, a9)",
+		Value:    "9c",
+		Category: flags.AccountCategory,
+	}
+	YubikeyPinFlag = &cli.StringFlag{
+		Name:     "yubikey.pin",
+		Usage:    "PIN for YubiKey PIV authentication",
+		Value:    piv.DefaultPIN,
+		Category: flags.AccountCategory,
+	}
+	YubikeyManagementKeyFlag = &cli.Uint64Flag{
+		Name:     "yubikey.managementkey",
+		Usage:    "Management key for YubiKey PIV (hex string, default is 24 bytes of 0xFF)",
+		Value:    binary.BigEndian.Uint64(piv.DefaultManagementKey[:]),
+		Category: flags.AccountCategory,
 	}
 	initCommand = &cli.Command{
 		Action:    initializeSecrets,
@@ -271,6 +291,7 @@ func init() {
 		utils.LightKDFFlag,
 		utils.NoUSBFlag,
 		utils.SmartCardDaemonPathFlag,
+		utils.YubikeyEnabledFlag,
 		utils.HTTPListenAddrFlag,
 		utils.HTTPVirtualHostsFlag,
 		utils.IPCDisabledFlag,

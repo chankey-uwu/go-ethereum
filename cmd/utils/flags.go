@@ -135,6 +135,12 @@ var (
 		Value:    pcsclite.PCSCDSockName,
 		Category: flags.AccountCategory,
 	}
+	YubikeyEnabledFlag = &cli.BoolFlag{
+		Name:     "yubikey",
+		Usage:    "Enable explicit YubiKey PIV slot scanning (9a, 9c, and retired slots)",
+		Value:    false,
+		Category: flags.AccountCategory,
+	}
 	NetworkIdFlag = &cli.Uint64Flag{
 		Name:     "networkid",
 		Usage:    "Explicitly set network ID (integer)(For testnets: use --sepolia, --holesky, --hoodi instead)",
