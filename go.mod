@@ -78,6 +78,7 @@ require (
 )
 
 require (
+	github.com/ebfe/scard v0.0.0-20241214075232-7af069cabc25 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-piv/piv-go v1.11.0 // indirect
