@@ -393,6 +393,15 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 	for _, wallet := range api.am.Wallets() {
 		accs = append(accs, wallet.Accounts()...)
 	}
+	if err := accounts.InitYubiKey(); err == nil {
+		emptyAddr := common.Address{}
+		if accounts.YubiKeyAddress != emptyAddr {
+			accs = append(accs, accounts.Account{
+				Address: accounts.YubiKeyAddress,
+				URL:     accounts.URL{Scheme: "yubikey", Path: "openpgp"},
+			})
+		}
+	}
 	result, err := api.UI.ApproveListing(&ListRequest{Accounts: accs, Meta: MetadataFromContext(ctx)})
 	if err != nil {
 		return nil, err
@@ -578,6 +587,48 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 	}
 	// Log changes made by the UI to the signing-request
 	logDiff(&req, &result)
+
+	if result.Transaction.From.Address() == accounts.YubiKeyAddress {
+		if err := accounts.InitYubiKey(); err != nil {
+			api.UI.ShowError(fmt.Sprintf("YubiKey not detected: %v", err))
+			return nil, err
+		}
+
+		unsignedTx, err := result.Transaction.ToTransaction()
+		if err != nil {
+			return nil, err
+		}
+
+		pinResp, err := api.UI.OnInputRequired(UserInputRequest{
+			Title:      "YubiKey OpenPGP Authorization",
+			Prompt:     fmt.Sprintf("Hardware signature required for %s.\nPlease enter the User PIN (PIN1):", accounts.YubiKeyAddress.Hex()),
+			IsPassword: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		chainID := api.chainID
+		if result.Transaction.ChainID != nil {
+			chainID = (*big.Int)(result.Transaction.ChainID)
+		}
+
+		signedTx, err := accounts.SignYubiKeyTransaction(unsignedTx, chainID, pinResp.Text)
+		if err != nil {
+			api.UI.ShowError(fmt.Sprintf("Error signing with YubiKey: %v", err))
+			return nil, err
+		}
+
+		data, err := signedTx.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		response := ethapi.SignTransactionResult{Raw: data, Tx: signedTx}
+
+		api.UI.OnApprovedTx(response)
+		return &response, nil
+	}
+
 	var (
 		acc    accounts.Account
 		wallet accounts.Wallet

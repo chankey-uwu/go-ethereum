@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -55,7 +54,6 @@ import (
 	"github.com/ethereum/go-ethereum/signer/fourbyte"
 	"github.com/ethereum/go-ethereum/signer/rules"
 	"github.com/ethereum/go-ethereum/signer/storage"
-	"github.com/go-piv/piv-go/piv"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
@@ -138,22 +136,16 @@ var (
 		Name:  "stdio-ui-test",
 		Usage: "Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.",
 	}
-	YubikeyPIVSlotCreationFlag = &cli.StringFlag{
-		Name:     "yubikey.pivslot",
-		Usage:    "Slot to create the PIV key on the YubiKey (e.g. 9a, 9c, a9)",
-		Value:    "9c",
-		Category: flags.AccountCategory,
-	}
-	YubikeyPinFlag = &cli.StringFlag{
+	YubikeyPinFlag = &cli.Uint64Flag{
 		Name:     "yubikey.pin",
-		Usage:    "PIN for YubiKey PIV authentication",
-		Value:    piv.DefaultPIN,
+		Usage:    "PIN for YubiKey OpenPGP (6-digit number, default is 123456)",
+		Value:    123456,
 		Category: flags.AccountCategory,
 	}
-	YubikeyManagementKeyFlag = &cli.Uint64Flag{
-		Name:     "yubikey.managementkey",
-		Usage:    "Management key for YubiKey PIV (hex string, default is 24 bytes of 0xFF)",
-		Value:    binary.BigEndian.Uint64(piv.DefaultManagementKey[:]),
+	YubikeyAdminPinFlag = &cli.Uint64Flag{
+		Name:     "yubikey.adminpin",
+		Usage:    "Admin PIN for YubiKey OpenPGP (6-10 digit number, default is 12345678)",
+		Value:    12345678,
 		Category: flags.AccountCategory,
 	}
 	initCommand = &cli.Command{

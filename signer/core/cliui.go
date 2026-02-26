@@ -19,21 +19,16 @@ package core
 import (
 	"bufio"
 	"context"
-	gocrypto "crypto"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/go-piv/piv-go/piv"
 )
 
 type CommandlineUI struct {
@@ -88,47 +83,6 @@ func (ui *CommandlineUI) confirm() bool {
 	}
 	fmt.Println("-----------------------")
 	return false
-}
-
-func (ui *CommandlineUI) confirmYubikey(card string, slot piv.Slot) bool {
-	yk, err := piv.Open(card)
-	if err != nil {
-		log.Error("Failed to open YubiKey", "card", card, "err", err)
-		return false
-	}
-	cert, err := yk.Certificate(slot)
-	if err != nil {
-		log.Error("Failed to get certificate from YubiKey", "card", card, "slot", slot, "err", err)
-		return false
-	}
-
-	pin := piv.DefaultPIN
-	auth := piv.KeyAuth{PIN: pin}
-	priv, err := yk.PrivateKey(slot, cert.PublicKey, auth)
-	if err != nil {
-		log.Error("Failed to get private key from YubiKey", "card", card, "slot", slot, "err", err)
-		return false
-	}
-	if priv == nil {
-		log.Error("Private key is nil", "card", card, "slot", slot)
-		return false
-	}
-
-	signer, ok := priv.(gocrypto.Signer)
-	if !ok {
-		log.Error("Failed to assert private key as crypto.Signer", "card", card, "slot", slot)
-		return false
-	}
-
-	signature, err := signer.Sign(rand.Reader, []byte("approve"), nil)
-
-	if err != nil {
-		log.Error("Failed to sign approval message", "card", card, "slot", slot, "err", err)
-		return false
-	}
-	fmt.Printf("%s", signature)
-	return true
-
 }
 
 // sanitize quotes and truncates 'txt' if longer than 'limit'. If truncated,
@@ -205,16 +159,6 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	showMetadata(request.Meta)
 	fmt.Printf("-------------------------------------------\n")
 
-	yubikeysList := listYubikeys()
-	for _, account := range yubikeysList {
-		if account.Address == strings.Split(request.Transaction.From.String(), " ")[0] {
-			if !ui.confirmYubikey(account.Card, account.Slot) {
-				return SignTxResponse{request.Transaction, false}, nil
-			}
-			return SignTxResponse{request.Transaction, true}, nil
-		}
-	}
-
 	if !ui.confirm() {
 		return SignTxResponse{request.Transaction, false}, nil
 	}
@@ -249,66 +193,6 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 	return SignDataResponse{true}, nil
 }
 
-type YubiKeyPublicKeyRead struct {
-	Card    string `json:"smartcard"`
-	Address string `json:"address"`
-}
-
-type YubiKeyPublicKeyReturn struct {
-	Card    string
-	Address string
-	Slot    piv.Slot
-}
-
-func readJSONYubikeys() []YubiKeyPublicKeyRead {
-	file, _ := os.Open("build/keystore/yubikeys.json")
-	defer file.Close()
-
-	var keyList []YubiKeyPublicKeyRead
-	err := json.NewDecoder(file).Decode(&keyList)
-	if err != nil {
-		log.Error("Failed to decode YubiKey public keys from JSON", "err", err)
-		return nil
-	}
-	return keyList
-}
-
-func listYubikeys() []YubiKeyPublicKeyReturn {
-	pubKeys := []YubiKeyPublicKeyReturn{}
-	cards, err := piv.Cards()
-	if err != nil {
-		return pubKeys
-	}
-
-	allSlots := []piv.Slot{piv.SlotAuthentication}
-	for i := uint32(0x82); i <= 0x95; i++ {
-	}
-
-	for _, card := range cards {
-		yk, err := piv.Open(card)
-		if err != nil {
-			continue
-		}
-		defer yk.Close()
-
-		for _, slot := range allSlots {
-			cert, err := yk.Certificate(slot)
-			if err != nil {
-				continue
-			}
-			pubKeys = append(pubKeys, YubiKeyPublicKeyReturn{
-				Card:    card,
-				Address: cert.Subject.CommonName,
-				Slot:    slot,
-			})
-		}
-	}
-
-	return pubKeys
-}
-
-// Crear llave con secp256k1
-
 // ApproveListing prompt the user for confirmation to list accounts
 // the list of accounts to list can be modified by the UI
 func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, error) {
@@ -321,16 +205,6 @@ func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, err
 	for _, account := range request.Accounts {
 		fmt.Printf("  [x] %v\n", account.Address.Hex())
 		fmt.Printf("    URL: %v\n", account.URL)
-	}
-	for _, yubikey := range readJSONYubikeys() {
-		fmt.Printf("  [x] %s\n", yubikey.Address)
-		fmt.Printf("    URL: %s\n", yubikey.Card)
-	}
-	for _, yubikey := range listYubikeys() {
-		request.Accounts = append(request.Accounts, accounts.Account{
-			Address: common.HexToAddress(yubikey.Address),
-			URL:     accounts.URL{Scheme: "yubikey", Path: fmt.Sprintf("%s://%s", yubikey.Card, yubikey.Slot)},
-		})
 	}
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)
@@ -394,21 +268,11 @@ func (ui *CommandlineUI) showAccounts() {
 		msg = fmt.Sprintf("\nFirst %d accounts listed (%d more available).\n", limit, len(accounts)-limit)
 		accounts = accounts[:limit]
 	}
-	accountIndex := 0
+	// accountIndex := 0
 	fmt.Fprint(out, "\n------- Available accounts -------\n")
 	for i, account := range accounts {
 		fmt.Fprintf(out, "%d. %s at %s\n", i, account.Address, account.URL)
-		accountIndex = i + 1
-	}
-
-	ykPubKeys := readJSONYubikeys()
-	if len(ykPubKeys) == 0 {
-		log.Info("No YubiKeys found")
-	}
-
-	for _, yk := range ykPubKeys {
-		fmt.Fprintf(out, "%d. %s at %s\n", accountIndex, yk.Address, yk.Card)
-		accountIndex++
+		// accountIndex = i + 1
 	}
 
 	fmt.Print(out.String(), msg)

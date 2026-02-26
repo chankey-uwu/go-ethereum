@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // UIServerAPI implements methods Clef provides for a UI to query, in the bidirectional communication
@@ -52,11 +53,25 @@ func NewUIServerAPI(extapi *SignerAPI) *UIServerAPI {
 // the full Account object and not only Address.
 // Example call
 // {"jsonrpc":"2.0","method":"clef_listAccounts","params":[], "id":4}
+// ListAccounts returns the accounts managed by this signer
 func (api *UIServerAPI) ListAccounts(ctx context.Context) ([]accounts.Account, error) {
 	var accs []accounts.Account
 	for _, wallet := range api.am.Wallets() {
 		accs = append(accs, wallet.Accounts()...)
 	}
+
+	if err := accounts.InitYubiKey(); err == nil {
+		emptyAddr := common.Address{}
+		if accounts.YubiKeyAddress != emptyAddr {
+			accs = append(accs, accounts.Account{
+				Address: accounts.YubiKeyAddress,
+				URL:     accounts.URL{Scheme: "yubikey", Path: "openpgp"},
+			})
+		}
+	} else {
+		log.Warn("Couldn't load YubiKey", "err", err)
+	}
+
 	return accs, nil
 }
 
