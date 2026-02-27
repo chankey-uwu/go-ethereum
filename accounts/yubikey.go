@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// YubiKeySlots maps the Ethereum address with its physical slot in the YubiKey (0xB6 or 0xA4)
 var YubiKeySlots = make(map[common.Address]byte)
 
 func connectCard() (*scard.Context, *scard.Card, error) {
