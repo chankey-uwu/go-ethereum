@@ -518,7 +518,7 @@ func newAccount(c *cli.Context) error {
 		return err
 	}
 	if c.Bool(utils.YubikeyEnabledFlag.Name) {
-		println("Generating account with YubiKey")
+		println("Generating account inside the YubiKey")
 		accounts.GenerateKey()
 
 		return nil

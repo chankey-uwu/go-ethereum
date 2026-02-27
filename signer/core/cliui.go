@@ -268,11 +268,10 @@ func (ui *CommandlineUI) showAccounts() {
 		msg = fmt.Sprintf("\nFirst %d accounts listed (%d more available).\n", limit, len(accounts)-limit)
 		accounts = accounts[:limit]
 	}
-	// accountIndex := 0
+
 	fmt.Fprint(out, "\n------- Available accounts -------\n")
 	for i, account := range accounts {
 		fmt.Fprintf(out, "%d. %s at %s\n", i, account.Address, account.URL)
-		// accountIndex = i + 1
 	}
 
 	fmt.Print(out.String(), msg)

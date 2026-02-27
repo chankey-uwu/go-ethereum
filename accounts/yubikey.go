@@ -277,20 +277,6 @@ func extractPubKeyBytes(tlv []byte) []byte {
 	return nil
 }
 
-func extractPubKey(tlv []byte) {
-	for i := 0; i < len(tlv)-2; i++ {
-		if tlv[i] == 0x86 {
-			length := int(tlv[i+1])
-			if i+2+length <= len(tlv) && tlv[i+2] == 0x04 {
-				pubKeyBytes := tlv[i+2 : i+2+length]
-				fmt.Printf("Complete Public Key (Hex): %s\n", hex.EncodeToString(pubKeyBytes))
-				return
-			}
-		}
-	}
-	fmt.Println("Error: Couldn't extract public key from TLV.")
-}
-
 func GenerateKey() {
 	ctx, card, err := connectCard()
 	if err != nil {
@@ -383,8 +369,14 @@ func GenerateKey() {
 	}
 
 	if isSuccess(rsp) {
-		fmt.Println("Key generated and saved successfully in the hardware.")
-		extractPubKey(rsp[:len(rsp)-2])
+		fmt.Println("Key generated successfully in the YubiKey.")
+
+		pubBytes := extractPubKeyBytes(rsp[:len(rsp)-2])
+		if pubBytes != nil {
+			fmt.Printf("Complete Public Key (Hex): %s\n", hex.EncodeToString(pubBytes))
+		} else {
+			fmt.Println("Error: Could not extract public key from response.")
+		}
 	} else {
 		log.Fatalf("Error generating key. State: %X\n", rsp[len(rsp)-2:])
 	}
