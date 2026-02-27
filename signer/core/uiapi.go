@@ -61,10 +61,9 @@ func (api *UIServerAPI) ListAccounts(ctx context.Context) ([]accounts.Account, e
 	}
 
 	if err := accounts.InitYubiKey(); err == nil {
-		emptyAddr := common.Address{}
-		if accounts.YubiKeyAddress != emptyAddr {
+		for _, addr := range accounts.GetYubiKeyAddresses() {
 			accs = append(accs, accounts.Account{
-				Address: accounts.YubiKeyAddress,
+				Address: addr,
 				URL:     accounts.URL{Scheme: "yubikey", Path: "openpgp"},
 			})
 		}

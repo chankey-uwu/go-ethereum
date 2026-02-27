@@ -214,6 +214,7 @@ The delpw command removes a password for a given address (keyfile).
 			keystoreFlag,
 			utils.LightKDFFlag,
 			acceptFlag,
+			utils.YubikeyEnabledFlag,
 		},
 		Description: `
 The newaccount command creates a new keystore-backed account. It is a convenience-method
@@ -516,10 +517,18 @@ func newAccount(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	addr, err := internalApi.New(context.Background())
-	if err == nil {
-		fmt.Printf("Generated account %v\n", addr.String())
+	if c.Bool(utils.YubikeyEnabledFlag.Name) {
+		println("Generating account with YubiKey")
+		accounts.GenerateKey()
+
+		return nil
+	} else {
+		addr, err := internalApi.New(context.Background())
+		if err == nil {
+			fmt.Printf("Generated account %v\n", addr.String())
+		}
 	}
+
 	return err
 }
 

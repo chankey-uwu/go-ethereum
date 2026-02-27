@@ -394,10 +394,9 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 		accs = append(accs, wallet.Accounts()...)
 	}
 	if err := accounts.InitYubiKey(); err == nil {
-		emptyAddr := common.Address{}
-		if accounts.YubiKeyAddress != emptyAddr {
+		for _, addr := range accounts.GetYubiKeyAddresses() {
 			accs = append(accs, accounts.Account{
-				Address: accounts.YubiKeyAddress,
+				Address: addr,
 				URL:     accounts.URL{Scheme: "yubikey", Path: "openpgp"},
 			})
 		}
@@ -588,7 +587,8 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 	// Log changes made by the UI to the signing-request
 	logDiff(&req, &result)
 
-	if result.Transaction.From.Address() == accounts.YubiKeyAddress {
+	fromAddr := result.Transaction.From.Address()
+	if _, isYubiKey := accounts.YubiKeySlots[fromAddr]; isYubiKey {
 		if err := accounts.InitYubiKey(); err != nil {
 			api.UI.ShowError(fmt.Sprintf("YubiKey not detected: %v", err))
 			return nil, err
@@ -600,8 +600,8 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 		}
 
 		pinResp, err := api.UI.OnInputRequired(UserInputRequest{
-			Title:      "YubiKey OpenPGP Authorization",
-			Prompt:     fmt.Sprintf("Hardware signature required for %s.\nPlease enter the User PIN (PIN1):", accounts.YubiKeyAddress.Hex()),
+			Title:      "YubiKey Authorization",
+			Prompt:     fmt.Sprintf("Hardware signature required for %s.\nPlease enter the User PIN:", fromAddr.Hex()),
 			IsPassword: true,
 		})
 		if err != nil {
@@ -613,7 +613,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 			chainID = (*big.Int)(result.Transaction.ChainID)
 		}
 
-		signedTx, err := accounts.SignYubiKeyTransaction(unsignedTx, chainID, pinResp.Text)
+		signedTx, err := accounts.SignYubiKeyTransaction(fromAddr, unsignedTx, chainID, pinResp.Text)
 		if err != nil {
 			api.UI.ShowError(fmt.Sprintf("Error signing with YubiKey: %v", err))
 			return nil, err
