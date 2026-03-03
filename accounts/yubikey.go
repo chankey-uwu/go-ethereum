@@ -35,17 +35,6 @@ func connectCard() (*scard.Context, *scard.Card, error) {
 	return ctx, card, nil
 }
 
-func selectOpenPGP(card *scard.Card) error {
-	// 0x00: CLA (Interindustry)
-	// 0xA4: INS (SELECT)
-	// 0x04: P1 (Select by DF Name)
-	// 0x00: P2 (First or only occurrence)
-	// 0x06: Lc (Length of the AID)
-	// 0xD2, 0x76, 0x00, 0x01, 0x24, 0x01: Data (OpenPGP AID)
-	selectApdu := []byte{0x00, 0xA4, 0x04, 0x00, 0x06, 0xD2, 0x76, 0x00, 0x01, 0x24, 0x01}
-	return transmitAndCheck(card, selectApdu, "OpenPGP Applet Selection")
-}
-
 func transmitAndCheck(card *scard.Card, apdu []byte, stepName string) error {
 	rsp, err := card.Transmit(apdu)
 	if err != nil {
@@ -55,6 +44,17 @@ func transmitAndCheck(card *scard.Card, apdu []byte, stepName string) error {
 		return fmt.Errorf("error on %s. Code State: %X", stepName, rsp[len(rsp)-2:])
 	}
 	return nil
+}
+
+func selectOpenPGP(card *scard.Card) error {
+	// 0x00: CLA (Interindustry)
+	// 0xA4: INS (SELECT)
+	// 0x04: P1 (Select by DF Name)
+	// 0x00: P2 (First or only occurrence)
+	// 0x06: Lc (Length of the AID)
+	// 0xD2, 0x76, 0x00, 0x01, 0x24, 0x01: Data (OpenPGP AID)
+	selectApdu := []byte{0x00, 0xA4, 0x04, 0x00, 0x06, 0xD2, 0x76, 0x00, 0x01, 0x24, 0x01}
+	return transmitAndCheck(card, selectApdu, "OpenPGP Applet Selection")
 }
 
 func isSuccess(rsp []byte) bool {
